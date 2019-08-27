@@ -17,7 +17,6 @@
 package io.cdap.plugin.sink;
 
 import com.google.common.base.Strings;
-import com.google.common.collect.Lists;
 import io.cdap.cdap.api.annotation.Description;
 import io.cdap.cdap.api.annotation.Macro;
 import io.cdap.cdap.api.annotation.Name;
@@ -38,7 +37,7 @@ import io.cdap.plugin.common.ReferenceBatchSink;
 import io.cdap.plugin.common.ReferencePluginConfig;
 import org.apache.hadoop.io.BytesWritable;
 import org.apache.kafka.clients.producer.ProducerConfig;
-import org.apache.kafka.common.serialization.BytesSerializer;
+import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -193,8 +192,8 @@ public class KafkaBatchSink extends ReferenceBatchSink<StructuredRecord, BytesWr
 
       conf.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, kafkaSinkConfig.brokers);
       conf.put("compression.type", kafkaSinkConfig.compressionType);
-      conf.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, BytesSerializer.class.getCanonicalName());
-      conf.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, BytesSerializer.class.getCanonicalName());
+      conf.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class.getCanonicalName());
+      conf.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class.getCanonicalName());
 
       KafkaHelpers.setupKerberosLogin(conf, kafkaSinkConfig.principal, kafkaSinkConfig.keytabLocation);
       addKafkaProperties(kafkaSinkConfig.kafkaProperties);
