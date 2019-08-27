@@ -31,16 +31,14 @@ import io.cdap.cdap.etl.api.Emitter;
 import io.cdap.cdap.etl.api.PipelineConfigurer;
 import io.cdap.cdap.etl.api.batch.BatchSink;
 import io.cdap.cdap.etl.api.batch.BatchSinkContext;
-import io.cdap.cdap.format.StructuredRecordStringConverter;
 import io.cdap.plugin.common.KafkaHelpers;
 import io.cdap.plugin.common.KeyValueListParser;
 import io.cdap.plugin.common.LineageRecorder;
 import io.cdap.plugin.common.ReferenceBatchSink;
 import io.cdap.plugin.common.ReferencePluginConfig;
-import org.apache.commons.lang3.StringUtils;
-import org.apache.hadoop.io.Text;
+import org.apache.hadoop.io.BytesWritable;
 import org.apache.kafka.clients.producer.ProducerConfig;
-import org.apache.kafka.common.serialization.StringSerializer;
+import org.apache.kafka.common.serialization.BytesSerializer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -56,7 +54,7 @@ import javax.annotation.Nullable;
 @Plugin(type = BatchSink.PLUGIN_TYPE)
 @Name("Kafka")
 @Description("KafkaSink to write events to kafka")
-public class KafkaBatchSink extends ReferenceBatchSink<StructuredRecord, Text, Text> {
+public class KafkaBatchSink extends ReferenceBatchSink<StructuredRecord, BytesWritable, BytesWritable> {
   private static final Logger LOG = LoggerFactory.getLogger(KafkaBatchSink.class);
 
   // Configuration for the plugin.
@@ -95,35 +93,18 @@ public class KafkaBatchSink extends ReferenceBatchSink<StructuredRecord, Text, T
   }
 
   @Override
-  public void transform(StructuredRecord input, Emitter<KeyValue<Text, Text>> emitter)
-    throws Exception {
+  public void transform(StructuredRecord input, Emitter<KeyValue<BytesWritable, BytesWritable>> emitter) {
     List<Schema.Field> fields = input.getSchema().getFields();
-
-      String body;
-      if (producerConfig.format.equalsIgnoreCase("json")) {
-        body = StructuredRecordStringConverter.toJsonString(input);
-      } else {
-        List<Object> objs = getExtractedValues(input, fields);
-        body = StringUtils.join(objs, ",");
-      }
-
-      if (Strings.isNullOrEmpty(producerConfig.key)) {
-        emitter.emit(new KeyValue<>((Text) null, new Text(body)));
-      } else {
-        String key = input.get(producerConfig.key);
-        emitter.emit(new KeyValue<>(new Text(key), new Text(body)));
-      }
-  }
-
-  private List<Object> getExtractedValues(StructuredRecord input, List<Schema.Field> fields) {
-    // Extract all values from the structured record
-    List<Object> objs = Lists.newArrayList();
-    for (Schema.Field field : fields) {
-      objs.add(input.get(field.getName()));
+    if (fields == null || fields.size() == 0) throw new IllegalArgumentException("Invalid input record," + input);
+    byte[] body = input.get(fields.get(0).getName());
+    if (body == null) throw new IllegalArgumentException("Body is null");
+    if (Strings.isNullOrEmpty(producerConfig.key)) {
+      emitter.emit(new KeyValue<>((BytesWritable) null, new BytesWritable(body)));
+    } else {
+      String key = input.get(producerConfig.key);
+      emitter.emit(new KeyValue<>(new BytesWritable(key.getBytes()), new BytesWritable(body)));
     }
-    return objs;
   }
-
 
   @Override
   public void destroy() {
@@ -158,11 +139,6 @@ public class KafkaBatchSink extends ReferenceBatchSink<StructuredRecord, Text, T
     @Macro
     private String topic;
 
-    @Name("format")
-    @Description("Format a structured record should be converted to")
-    @Macro
-    private String format;
-
     @Name("kafkaProperties")
     @Description("Additional kafka producer properties to set")
     @Macro
@@ -184,14 +160,13 @@ public class KafkaBatchSink extends ReferenceBatchSink<StructuredRecord, Text, T
     @Macro
     private String compressionType;
 
-    public Config(String brokers, String async, String key, String topic, String format, String kafkaProperties,
+    public Config(String brokers, String async, String key, String topic, String kafkaProperties,
                   String compressionType) {
       super(String.format("Kafka_%s", topic));
       this.brokers = brokers;
       this.async = async;
       this.key = key;
       this.topic = topic;
-      this.format = format;
       this.kafkaProperties = kafkaProperties;
       this.compressionType = compressionType;
     }
@@ -214,8 +189,8 @@ public class KafkaBatchSink extends ReferenceBatchSink<StructuredRecord, Text, T
 
       conf.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, kafkaSinkConfig.brokers);
       conf.put("compression.type", kafkaSinkConfig.compressionType);
-      conf.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getCanonicalName());
-      conf.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getCanonicalName());
+      conf.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, BytesSerializer.class.getCanonicalName());
+      conf.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, BytesSerializer.class.getCanonicalName());
 
       KafkaHelpers.setupKerberosLogin(conf, kafkaSinkConfig.principal, kafkaSinkConfig.keytabLocation);
       addKafkaProperties(kafkaSinkConfig.kafkaProperties);

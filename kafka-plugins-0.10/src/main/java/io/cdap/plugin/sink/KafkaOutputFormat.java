@@ -19,7 +19,7 @@ package io.cdap.plugin.sink;
 import com.google.common.base.Strings;
 import io.cdap.plugin.common.KafkaHelpers;
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.io.Text;
+import org.apache.hadoop.io.BytesWritable;
 import org.apache.hadoop.mapreduce.JobContext;
 import org.apache.hadoop.mapreduce.OutputCommitter;
 import org.apache.hadoop.mapreduce.OutputFormat;
@@ -37,7 +37,7 @@ import java.util.Properties;
 /**
  * Output format to write to kafka
  */
-public class KafkaOutputFormat extends OutputFormat<Text, Text> {
+public class KafkaOutputFormat extends OutputFormat<BytesWritable, BytesWritable> {
   private static final Logger LOG = LoggerFactory.getLogger(KafkaOutputFormat.class);
 
   private KafkaProducer<String, String> producer;
@@ -78,7 +78,7 @@ public class KafkaOutputFormat extends OutputFormat<Text, Text> {
   }
 
   @Override
-  public RecordWriter<Text, Text> getRecordWriter(TaskAttemptContext context)
+  public RecordWriter<BytesWritable, BytesWritable> getRecordWriter(TaskAttemptContext context)
     throws IOException, InterruptedException {
     Configuration configuration = context.getConfiguration();
 

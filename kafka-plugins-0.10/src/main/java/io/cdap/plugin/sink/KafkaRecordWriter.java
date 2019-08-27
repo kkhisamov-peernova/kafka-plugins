@@ -16,7 +16,7 @@
 
 package io.cdap.plugin.sink;
 
-import org.apache.hadoop.io.Text;
+import org.apache.hadoop.io.BytesWritable;
 import org.apache.hadoop.mapreduce.RecordWriter;
 import org.apache.hadoop.mapreduce.TaskAttemptContext;
 import org.apache.kafka.clients.producer.KafkaProducer;
@@ -25,12 +25,13 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.util.Base64;
 import java.util.concurrent.ExecutionException;
 
 /**
  * Record writer to write events to kafka
  */
-public class KafkaRecordWriter extends RecordWriter<Text, Text> {
+public class KafkaRecordWriter extends RecordWriter<BytesWritable, BytesWritable> {
   private static final Logger LOG = LoggerFactory.getLogger(KafkaRecordWriter.class);
   private KafkaProducer<String, String> producer;
   private String topic;
@@ -41,11 +42,11 @@ public class KafkaRecordWriter extends RecordWriter<Text, Text> {
   }
 
   @Override
-  public void write(Text key, Text value) throws IOException, InterruptedException {
+  public void write(BytesWritable key, BytesWritable value) throws IOException, InterruptedException {
     if (key == null) {
-      sendMessage(null, value.toString());
+      sendMessage(null, value.getBytes());
     } else {
-      sendMessage(key.toString(), value.toString());
+      sendMessage(key.getBytes(), value.getBytes());
     }
   }
 
@@ -56,9 +57,10 @@ public class KafkaRecordWriter extends RecordWriter<Text, Text> {
     }
   }
 
-  private void sendMessage(final String key, final String body) throws IOException, InterruptedException {
+  private void sendMessage(final byte[] key, final byte[] body) throws IOException, InterruptedException {
     try {
-      producer.send(new ProducerRecord<>(topic, key, body)).get();
+      LOG.info("encoded body="+ Base64.getEncoder().encodeToString(body));
+      producer.send(new ProducerRecord(topic, key, body)).get();
     } catch (ExecutionException e) {
       throw new IOException(e.getCause());
     }
