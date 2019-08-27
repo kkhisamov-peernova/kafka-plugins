@@ -3,7 +3,7 @@
 
 Description
 -----------
-Kafka sink that allows you to write events into CSV or JSON to kafka.
+Kafka sink that allows you to write events into bytes to kafka.
 Plugin has the capability to push the data to a Kafka topic. It can also be
 configured to partition events being written to kafka based on a configurable key. 
 The sink can also be configured to operate in sync or async mode and apply different
@@ -21,8 +21,6 @@ Configuration
 **async:** Specifies whether writing the events to broker is *Asynchronous* or *Synchronous*.
 
 **compressionType** Compression type to be applied on message. It can be none, gzip or snappy. Default value is none
-
-**format:** Specifies the format of the event published to Kafka. It can be csv or json. Defualt value is csv.
 
 **kafkaProperties** Specifies additional kafka producer properties like acks, client.id as key and value pair.
 
@@ -51,7 +49,6 @@ Additional properties like number of acknowledgements and client id can also be 
         "topic": "alarm",
         "async": "FALSE",
         "compressionType": "gzip",
-        "format": "CSV",
         "kafkaProperties": "acks:2,client.id:myclient",
         "key": "message"
     }

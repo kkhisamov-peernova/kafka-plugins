@@ -2,7 +2,7 @@
   "metadata": {
     "spec-version": "1.5"
   },
-  "display-name": "Kafka Producer",
+  "display-name": "Kafka Bytes Producer",
   "configuration-groups": [
     {
       "label": "Kafka Producer and Topic Config",
@@ -65,18 +65,6 @@
     {
       "label": "Message Configuration",
       "properties": [
-        {
-          "widget-type": "select",
-          "label": "Message Format",
-          "name": "format",
-          "widget-attributes": {
-            "values": [
-              "CSV",
-              "JSON"
-            ],
-            "default": "CSV"
-          }
-        },
         {
           "widget-type": "textbox",
           "label": "Message Key field",
