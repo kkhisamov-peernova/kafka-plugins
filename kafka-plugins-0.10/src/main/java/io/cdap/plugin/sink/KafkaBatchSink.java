@@ -52,7 +52,7 @@ import javax.annotation.Nullable;
  * Kafka sink to write to Kafka
  */
 @Plugin(type = BatchSink.PLUGIN_TYPE)
-@Name("Kafka bytes")
+@Name("Kafka")
 @Description("KafkaSink to write bytes events to kafka")
 public class KafkaBatchSink extends ReferenceBatchSink<StructuredRecord, BytesWritable, BytesWritable> {
   private static final Logger LOG = LoggerFactory.getLogger(KafkaBatchSink.class);
