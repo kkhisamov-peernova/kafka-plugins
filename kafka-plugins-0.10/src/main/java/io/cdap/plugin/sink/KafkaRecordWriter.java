@@ -59,7 +59,7 @@ public class KafkaRecordWriter extends RecordWriter<BytesWritable, BytesWritable
 
   private void sendMessage(final byte[] key, final byte[] body) throws IOException, InterruptedException {
     try {
-      LOG.info("encoded body="+ Base64.getEncoder().encodeToString(body));
+      LOG.info("encoded body=" + Base64.getEncoder().encodeToString(body));
       producer.send(new ProducerRecord(topic, key, body)).get();
     } catch (ExecutionException e) {
       throw new IOException(e.getCause());

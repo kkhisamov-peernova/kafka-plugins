@@ -95,9 +95,13 @@ public class KafkaBatchSink extends ReferenceBatchSink<StructuredRecord, BytesWr
   @Override
   public void transform(StructuredRecord input, Emitter<KeyValue<BytesWritable, BytesWritable>> emitter) {
     List<Schema.Field> fields = input.getSchema().getFields();
-    if (fields == null || fields.size() == 0) throw new IllegalArgumentException("Invalid input record," + input);
+    if (fields == null || fields.size() == 0) {
+      throw new IllegalArgumentException("Invalid input record," + input);
+    }
     byte[] body = input.get(fields.get(0).getName());
-    if (body == null) throw new IllegalArgumentException("Body is null");
+    if (body == null) {
+      throw new IllegalArgumentException("Body is null");
+    }
     if (Strings.isNullOrEmpty(producerConfig.key)) {
       emitter.emit(new KeyValue<>((BytesWritable) null, new BytesWritable(body)));
     } else {
