@@ -41,6 +41,7 @@ import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.nio.ByteBuffer;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -97,7 +98,8 @@ public class KafkaBatchSink extends ReferenceBatchSink<StructuredRecord, BytesWr
     if (fields == null || fields.size() == 0) {
       throw new IllegalArgumentException("Invalid input record," + input);
     }
-    byte[] body = input.get(fields.get(0).getName());
+    Object fieldValue = input.get(fields.get(0).getName());
+    byte[] body = fieldValue instanceof ByteBuffer ? ((ByteBuffer) fieldValue).array() : (byte[]) fieldValue;
     if (body == null) {
       throw new IllegalArgumentException("Body is null");
     }

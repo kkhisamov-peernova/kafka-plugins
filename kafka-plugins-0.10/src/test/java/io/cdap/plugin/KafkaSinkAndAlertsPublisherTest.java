@@ -16,19 +16,13 @@
 
 package io.cdap.plugin;
 
-import com.google.common.base.Charsets;
-import com.google.common.base.Function;
 import com.google.common.collect.ImmutableSet;
-import com.google.common.collect.Iterables;
-import com.google.gson.Gson;
 import io.cdap.cdap.api.artifact.ArtifactSummary;
 import io.cdap.cdap.api.data.format.StructuredRecord;
 import io.cdap.cdap.api.data.schema.Schema;
 import io.cdap.cdap.api.dataset.table.Table;
 import io.cdap.cdap.datapipeline.DataPipelineApp;
 import io.cdap.cdap.datapipeline.SmartWorkflow;
-import io.cdap.cdap.etl.api.Alert;
-import io.cdap.cdap.etl.mock.alert.NullAlertTransform;
 import io.cdap.cdap.etl.mock.batch.MockSource;
 import io.cdap.cdap.etl.mock.test.HydratorTestBase;
 import io.cdap.cdap.etl.proto.v2.ETLBatchConfig;
@@ -43,10 +37,9 @@ import io.cdap.cdap.test.ApplicationManager;
 import io.cdap.cdap.test.DataSetManager;
 import io.cdap.cdap.test.TestConfiguration;
 import io.cdap.cdap.test.WorkflowManager;
-import io.cdap.plugin.alertpublisher.KafkaAlertPublisher;
 import io.cdap.plugin.sink.KafkaBatchSink;
 import org.apache.kafka.clients.consumer.RangeAssignor;
-import org.apache.kafka.common.serialization.StringSerializer;
+import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.twill.common.Cancellable;
 import org.apache.twill.internal.kafka.client.ZKKafkaClientService;
 import org.apache.twill.internal.utils.Networks;
@@ -62,6 +55,7 @@ import org.junit.ClassRule;
 import org.junit.Test;
 
 import java.io.File;
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -81,8 +75,6 @@ public class KafkaSinkAndAlertsPublisherTest extends HydratorTestBase {
   @ClassRule
   public static final TestConfiguration CONFIG = new TestConfiguration("explore.enabled", false);
 
-  private static final Gson GSON = new Gson();
-
   private static ZKClientService zkClient;
   private static KafkaClientService kafkaClient;
   private static InMemoryZKServer zkServer;
@@ -101,9 +93,8 @@ public class KafkaSinkAndAlertsPublisherTest extends HydratorTestBase {
     addPluginArtifact(NamespaceId.DEFAULT.artifact("example-plugins", "1.0.0"),
                       parentArtifact,
                       KafkaBatchSink.class,
-                      KafkaAlertPublisher.class,
                       RangeAssignor.class,
-                      StringSerializer.class);
+                      ByteArraySerializer.class);
 
     zkServer = InMemoryZKServer.builder().setDataDir(TMP_FOLDER.newFolder()).build();
     zkServer.startAndWait();
@@ -129,47 +120,28 @@ public class KafkaSinkAndAlertsPublisherTest extends HydratorTestBase {
   }
 
   @Test
-  public void testKafkaSinkAndAlertsPublisher() throws Exception {
-    Schema schema = Schema.recordOf(
-      "user",
-      Schema.Field.of("id", Schema.nullableOf(Schema.of(Schema.Type.LONG))),
-      Schema.Field.of("first", Schema.of(Schema.Type.STRING)),
-      Schema.Field.of("last", Schema.of(Schema.Type.STRING)));
-
+  public void testKafkaSink() throws Exception {
+    Schema schema = Schema.recordOf("test", Schema.Field.of("data", Schema.of(Schema.Type.BYTES)));
     // create the pipeline config
     String inputName = "sinkTestInput";
 
-    String usersTopic = "records";
-    String alertsTopic = "alerts";
+    String dataTopic = "records";
     Map<String, String> sinkProperties = new HashMap<>();
     sinkProperties.put("brokers", "localhost:" + kafkaPort);
     sinkProperties.put("referenceName", "kafkaTest");
-    sinkProperties.put("topic", usersTopic);
+    sinkProperties.put("topic", dataTopic);
     sinkProperties.put("schema", schema.toString());
-    sinkProperties.put("format", "csv");
-    sinkProperties.put("key", "last");
     sinkProperties.put("async", "FALSE");
     sinkProperties.put("compressionType", "none");
-
-    Map<String, String> alertProperties = new HashMap<>();
-    alertProperties.put("brokers", "localhost:" + kafkaPort);
-    alertProperties.put("topic", alertsTopic);
 
     ETLStage source = new ETLStage("source", MockSource.getPlugin(inputName));
     ETLStage sink =
       new ETLStage("sink", new ETLPlugin("Kafka", KafkaBatchSink.PLUGIN_TYPE, sinkProperties, null));
-    ETLStage transform = new ETLStage("nullAlert", NullAlertTransform.getPlugin("id"));
-    ETLStage alert =
-      new ETLStage("alert", new ETLPlugin("KafkaAlerts", KafkaAlertPublisher.PLUGIN_TYPE, alertProperties));
 
     ETLBatchConfig pipelineConfig = ETLBatchConfig.builder("* * * * *")
       .addStage(source)
-      .addStage(transform)
       .addStage(sink)
-      .addStage(alert)
-      .addConnection(source.getName(), transform.getName())
-      .addConnection(transform.getName(), sink.getName())
-      .addConnection(transform.getName(), alert.getName())
+      .addConnection(source.getName(), sink.getName())
       .build();
 
     // create the pipeline
@@ -177,30 +149,20 @@ public class KafkaSinkAndAlertsPublisherTest extends HydratorTestBase {
     ApplicationManager appManager = deployApplication(pipelineId, new AppRequest<>(APP_ARTIFACT, pipelineConfig));
 
 
-    Set<String> expected = ImmutableSet.of("100,samuel,jackson",
-                                           "200,dwayne,johnson",
-                                           "300,christopher,walken",
-                                           "400,donald,trump");
+    Set<ByteBuffer> expected = ImmutableSet.of(
+            ByteBuffer.wrap(new byte[]{0, 1, 2}),
+            ByteBuffer.wrap(new byte[]{3, 4, 5}),
+            ByteBuffer.wrap(new byte[]{6, 7, 8})
+    );
 
     List<StructuredRecord> records = new ArrayList<>();
-    for (String e : expected) {
-      String[] splits = e.split(",");
+    for (ByteBuffer e : expected) {
       StructuredRecord record =
         StructuredRecord.builder(schema)
-          .set("id", Long.parseLong(splits[0]))
-          .set("first", splits[1])
-          .set("last", splits[2])
+          .set("data", e.array())
           .build();
       records.add(record);
     }
-
-    // Add a null record to get an alert
-    StructuredRecord nullRecord =
-      StructuredRecord.builder(schema)
-        .set("first", "terry")
-        .set("last", "crews")
-        .build();
-    records.add(nullRecord);
 
     DataSetManager<Table> sourceTable = getDataset(inputName);
     MockSource.writeInput(sourceTable, records);
@@ -210,27 +172,14 @@ public class KafkaSinkAndAlertsPublisherTest extends HydratorTestBase {
     workflowManager.waitForRun(ProgramRunStatus.COMPLETED, 1, TimeUnit.MINUTES);
 
     // Assert users
-    Set<String> actual = readKafkaRecords(usersTopic, expected.size());
+    Set<ByteBuffer> actual = readKafkaRecords(dataTopic, expected.size());
     Assert.assertEquals(expected, actual);
-
-    // Assert alerts
-    Set<String> actualAlerts = readKafkaRecords(alertsTopic, 1);
-    // NullAlertTransform always returns empty hash map in alert
-    Assert.assertEquals(ImmutableSet.of(new Alert(transform.getName(), new HashMap<String, String>())),
-                        ImmutableSet.copyOf(Iterables.transform(actualAlerts,
-                                                                new Function<String, Alert>() {
-                                                                  @Override
-                                                                  public Alert apply(String s) {
-                                                                    return GSON.fromJson(s, Alert.class);
-                                                                  }
-                                                                }
-                                                                )));
   }
 
-  private Set<String> readKafkaRecords(String topic, final int maxMessages) throws InterruptedException {
+  private Set<ByteBuffer> readKafkaRecords(String topic, final int maxMessages) throws InterruptedException {
     KafkaConsumer kafkaConsumer = kafkaClient.getConsumer();
 
-    final Set<String> kafkaMessages = new HashSet<>();
+    final Set<ByteBuffer> kafkaMessages = new HashSet<>();
     KafkaConsumer.Preparer preparer = kafkaConsumer.prepare();
     preparer.addFromBeginning(topic, 0);
 
@@ -242,8 +191,7 @@ public class KafkaSinkAndAlertsPublisherTest extends HydratorTestBase {
         while (messages.hasNext()) {
           FetchedMessage message = messages.next();
           nextOffset = message.getNextOffset();
-          String payload = Charsets.UTF_8.decode(message.getPayload()).toString();
-          kafkaMessages.add(payload);
+          kafkaMessages.add(message.getPayload());
         }
         // We are done when maxMessages are received
         if (kafkaMessages.size() >= maxMessages) {
